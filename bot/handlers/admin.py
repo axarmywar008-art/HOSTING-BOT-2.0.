@@ -1,13 +1,15 @@
+import datetime
+import logging
 from pyrogram import Client, filters
 from pyrogram.types import Message
-import datetime
 from bot.config.settings import settings
 from bot.database.db import database
 from bot.keyboards.main import admin_keyboard, confirmation_keyboard
 from bot.utils.security import validate_railway_token
 from railway.token_manager import token_manager
 from bot.deployment.engine import deployment_engine
-from bot.workers.point_deduction_worker import point_deduction_worker
+
+logger = logging.getLogger(__name__)
 
 
 @Client.on_message(filters.command("admin") & filters.private & filters.user(settings.OWNER_IDS))
@@ -31,6 +33,131 @@ async def admin_panel_handler(client: Client, message: Message):
         reply_markup=admin_keyboard(),
     )
 
+
+@Client.on_message(filters.command("addtoken") & filters.private & filters.user(settings.OWNER_IDS))
+async def add_token_handler(client: Client, message: Message):
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply_text("<b>Usage:</b> <code>/addtoken RAILWAY_TOKEN</code>")
+        return
+    token = parts[1].strip()
+    if not validate_railway_token(token):
+        await message.reply_text("<b>❌ Invalid Railway token format</b>")
+        return
+    try:
+        doc = await token_manager.add_token(token, message.from_user.id)
+        await message.reply_text(f"<b>✅ Token added successfully</b>\n\n<b>Token:</b> <code>{token[:8]}...</code>")
+    except ValueError as e:
+        await message.reply_text(f"<b>❌ {str(e)}</b>")
+
+
+@Client.on_message(filters.command("removetoken") & filters.private & filters.user(settings.OWNER_IDS))
+async def remove_token_handler(client: Client, message: Message):
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply_text("<b>Usage:</b> <code>/removetoken TOKEN</code>")
+        return
+    token = parts[1].strip()
+    await token_manager.remove_token(token)
+    await message.reply_text("<b>✅ Token removed</b>")
+
+
+@Client.on_message(filters.command("addchannel") & filters.private & filters.user(settings.OWNER_IDS))
+async def add_channel_handler(client: Client, message: Message):
+    parts = message.text.split(maxsplit=3)
+    if len(parts) < 3:
+        await message.reply_text("<b>Usage:</b> <code>/addchannel CHANNEL_ID INVITE_LINK [NAME]</code>")
+        return
+    try:
+        channel_id = int(parts[1])
+        invite_link = parts[2]
+        name = parts[3] if len(parts) > 3 else ""
+        await database.add_channel(channel_id, invite_link, name)
+        await message.reply_text(f"<b>✅ Channel added:</b> {name or channel_id}")
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid channel ID</b>")
+
+
+@Client.on_message(filters.command("removechannel") & filters.private & filters.user(settings.OWNER_IDS))
+async def remove_channel_handler(client: Client, message: Message):
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply_text("<b>Usage:</b> <code>/removechannel CHANNEL_ID</code>")
+        return
+    try:
+        channel_id = int(parts[1])
+        await database.remove_channel(channel_id)
+        await message.reply_text("<b>✅ Channel removed</b>")
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid channel ID</b>")
+
+
+@Client.on_message(filters.command("channels") & filters.private & filters.user(settings.OWNER_IDS))
+async def list_channels_handler(client: Client, message: Message):
+    channels = await database.get_all_channels()
+    if not channels:
+        await message.reply_text("<b>No channels configured</b>")
+        return
+    text = "<blockquote><b>📢 ᴄᴏɴғɪɢᴜʀᴇᴅ ᴄʜᴀɴɴᴇʟs</b></blockquote>\n\n"
+    for ch in channels:
+        text += f"<b>📌 {ch.get('name', 'Unnamed')}</b>\n"
+        text += f"<b>  ID:</b> <code>{ch['channel_id']}</code>\n"
+        text += f"<b>  Link:</b> {ch.get('invite_link', 'N/A')}\n\n"
+    await message.reply_text(text)
+
+
+@Client.on_message(filters.command("broadcast") & filters.private & filters.user(settings.OWNER_IDS))
+async def broadcast_handler(client: Client, message: Message):
+    if not message.reply_to_message:
+        await message.reply_text("<b>Reply to a message to broadcast it to all users</b>")
+        return
+    users = await database.get_all_users()
+    success = 0
+    failed = 0
+    status_msg = await message.reply_text("<b>📢 Broadcasting...</b>")
+    for user in users:
+        try:
+            await message.reply_to_message.copy(user["user_id"])
+            success += 1
+        except Exception:
+            failed += 1
+    await status_msg.edit_text(
+        f"<b>📢 Broadcast Complete</b>\n\n"
+        f"<b>✅ Sent:</b> {success}\n"
+        f"<b>❌ Failed:</b> {failed}"
+    )
+
+
+@Client.on_message(filters.command("ban") & filters.private & filters.user(settings.OWNER_IDS))
+async def ban_handler(client: Client, message: Message):
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply_text("<b>Usage:</b> <code>/ban USER_ID [REASON]</code>")
+        return
+    try:
+        user_id = int(parts[1])
+        reason = " ".join(parts[2:]) if len(parts) > 2 else "No reason"
+        await database.update_user(user_id, {"is_banned": True, "ban_reason": reason})
+        await message.reply_text(f"<b>✅ User {user_id} banned</b>\n<b>Reason:</b> {reason}")
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid user ID</b>")
+
+
+@Client.on_message(filters.command("unban") & filters.private & filters.user(settings.OWNER_IDS))
+async def unban_handler(client: Client, message: Message):
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply_text("<b>Usage:</b> <code>/unban USER_ID</code>")
+        return
+    try:
+        user_id = int(parts[1])
+        await database.update_user(user_id, {"is_banned": False, "ban_reason": ""})
+        await message.reply_text(f"<b>✅ User {user_id} unbanned</b>")
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid user ID</b>")
+
+
+# ==================== POINTS ADMIN COMMANDS ====================
 
 @Client.on_message(filters.command("addpoints") & filters.private & filters.user(settings.OWNER_IDS))
 async def add_points_handler(client: Client, message: Message):
@@ -148,7 +275,7 @@ async def list_users_points_handler(client: Client, message: Message):
     text = "<blockquote><b>⭐ ᴜsᴇʀs ᴘᴏɪɴᴛs ʙᴀʟᴀɴᴄᴇ</b></blockquote>\n\n"
     sorted_users = sorted(users, key=lambda x: x.get("points", 0), reverse=True)
     
-    for i, user in enumerate(sorted_users[:50]):  # Show top 50
+    for i, user in enumerate(sorted_users[:50]):
         user_id = user.get("user_id")
         username = user.get("username", "Unknown")
         points = user.get("points", 0)
@@ -234,10 +361,7 @@ async def set_daily_cost_handler(client: Client, message: Message):
             await message.reply_text("<b>❌ Amount must be greater than 0</b>")
             return
         
-        # Update settings
         settings.DAILY_POINT_COST = amount
-        # Also update the worker
-        point_deduction_worker.DAILY_COST = amount
         
         await message.reply_text(
             f"<b>✅ Daily point cost updated to {amount} points/day</b>\n\n"
@@ -275,5 +399,31 @@ async def set_min_points_handler(client: Client, message: Message):
         await message.reply_text("<b>❌ Invalid amount</b>")
 
 
-# Keep all existing admin commands (addtoken, removetoken, addchannel, etc.)
-# ... rest of the admin commands remain unchanged
+@Client.on_message(filters.command("points") & filters.private)
+async def points_handler(client: Client, message: Message):
+    """Check your points balance and recent transactions."""
+    user_id = message.from_user.id
+    points = await database.get_points_balance(user_id)
+    transactions = await database.get_point_transactions(user_id, limit=10)
+    
+    text = f"<b>⭐ Your Points Balance:</b> {points}\n\n"
+    
+    if transactions:
+        text += "<b>Recent Transactions:</b>\n"
+        for tx in transactions:
+            amount = tx.get("amount", 0)
+            type_emoji = "➕" if tx.get("type") == "credit" else "➖"
+            reason = tx.get("reason", "Unknown")
+            created = tx.get("created_at")
+            if created:
+                created_str = created.strftime("%Y-%m-%d %H:%M")
+            else:
+                created_str = "Unknown"
+            text += f"{type_emoji} {amount} pts - {reason} ({created_str})\n"
+    else:
+        text += "No transactions yet."
+    
+    text += f"\n\n<b>📌 Daily Cost per Bot:</b> {settings.DAILY_POINT_COST} pts"
+    text += f"\n<b>📌 Min Points for Deployment:</b> {settings.MINIMUM_POINTS_FOR_DEPLOYMENT} pts"
+    
+    await message.reply_text(text)
