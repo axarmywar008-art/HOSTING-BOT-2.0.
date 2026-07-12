@@ -428,8 +428,8 @@ async def cb_updates(client: Client, query: CallbackQuery):
 
 async def cb_support(client: Client, query: CallbackQuery):
     await query.message.edit_text(
-        "<blockquote><b>📞 sᴜᴘᴘᴏʀᴛ ᴄᴇɴᴛᴇʀ</b></blockquote>\n\n"
-        "<b>ɴᴇᴇᴅ ʜᴇʟᴘ? ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ʙᴇʟᴏᴡ.</b>",
+        "<blockquote><b>📞 sᴜᴘᴘᴏʀᴛ ᴄᴇɴᴛᴇʀ https://t.me/GHOSTRIDERFIRE0"
+        "<b>ɴᴇᴇᴅ ʜᴇʟᴘ? https://t.me/xtrchannel</b>\n\n",
         reply_markup=support_keyboard(),
     )
     await query.answer()
@@ -1335,8 +1335,8 @@ async def cb_support_contact(client: Client, query: CallbackQuery):
     await query.message.edit_text(
         "<b>📞 Contact Support</b>\n\n"
         "<b>For support, please contact:</b>\n"
-        "<b>📧 Email:</b> support@pythonbotcloud.com\n"
-        "<b>💬 Telegram:</b> @PythonBotCloudSupport",
+        "<b>📧 OWNER: https://t.me/GHOSTRIDERFIRE0""
+        "<b>💬 Telegram: https://t.me/xtrchannel",
         reply_markup=support_keyboard(),
     )
     await query.answer()
