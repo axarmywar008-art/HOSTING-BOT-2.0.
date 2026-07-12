@@ -1335,8 +1335,8 @@ async def cb_support_contact(client: Client, query: CallbackQuery):
     await query.message.edit_text(
         "<b>📞 Contact Support</b>\n\n"
         "<b>For support, please contact:</b>\n"
-        "<b>📧 OWNER:" https://t.me/GHOSTRIDERFIRE0"
-        "<b>💬 Telegram: "https://t.me/xtrchannel",
+        "<b>📧 OWNER: </b> support https://t.me/GHOSTRIDERFIRE0\n"
+        "<b>💬 Telegram: </b> https://t.me/xtrchannel",
         reply_markup=support_keyboard(),
     )
     await query.answer()
