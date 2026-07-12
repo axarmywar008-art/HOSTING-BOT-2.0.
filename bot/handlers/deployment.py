@@ -1,15 +1,17 @@
 import os
 import uuid
+import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from bot.config.settings import settings
 from bot.database.db import database
 from bot.keyboards.main import deploy_keyboard, my_bot_keyboard, variable_keyboard, confirmation_keyboard
-from bot.deployment.engine import deployment_engine
+from bot.deployment.engine import deployment_engine, DEPLOY_CACHE
 from bot.utils.formatters import parse_env_content, format_variables_for_display, format_uptime
 from bot.utils.security import scan_zip_for_threats
 from github.client import github_client
-from bot.workers.point_deduction_worker import point_deduction_worker
+
+# REMOVED: from bot.workers.point_deduction_worker import point_deduction_worker
 
 
 @Client.on_message(filters.command("deploy") & filters.private)
@@ -74,8 +76,6 @@ async def handle_github_url(client: Client, message: Message):
         return
 
     url = message.text.strip()
-    from bot.deployment.engine import DEPLOY_CACHE
-    # Check for existing pending deployment
     existing_pending = [did for did, d in DEPLOY_CACHE.items() if d.get("user_id") == user_id]
     if existing_pending:
         await message.reply_text(
@@ -93,7 +93,6 @@ async def handle_github_url(client: Client, message: Message):
         return
 
     try:
-        # Wrap scan with 90s timeout to prevent infinite hang
         scan = await asyncio.wait_for(
             github_client.scan_repository(parsed["owner"], parsed["repo"], parsed["branch"]),
             timeout=90,
@@ -127,7 +126,6 @@ async def handle_github_url(client: Client, message: Message):
     )
 
     deploy_id = str(uuid.uuid4())[:8]
-    from bot.deployment.engine import DEPLOY_CACHE
     DEPLOY_CACHE[deploy_id] = {
         "user_id": message.from_user.id,
         "type": "github",
@@ -162,7 +160,6 @@ async def handle_zip_upload(client: Client, message: Message):
         )
         return
 
-    from bot.deployment.engine import DEPLOY_CACHE
     existing_pending = [did for did, d in DEPLOY_CACHE.items() if d.get("user_id") == user_id]
     if existing_pending:
         await message.reply_text(
@@ -196,7 +193,6 @@ async def handle_zip_upload(client: Client, message: Message):
             )
             return
 
-        from bot.utils.formatters import is_python_project, detect_framework, detect_startup_file
         import zipfile
         import io
 
@@ -211,6 +207,8 @@ async def handle_zip_upload(client: Client, message: Message):
                     contents[info.filename] = zf.read(info).decode("utf-8", errors="ignore")
                 except Exception:
                     contents[info.filename] = ""
+
+        from bot.utils.formatters import is_python_project, detect_framework, detect_startup_file
 
         if not is_python_project(files):
             await status_msg.edit_text("<b>❌ ZIP must contain a Python Telegram bot project</b>")
@@ -231,7 +229,6 @@ async def handle_zip_upload(client: Client, message: Message):
         )
 
         deploy_id = str(uuid.uuid4())[:8]
-        from bot.deployment.engine import DEPLOY_CACHE
         DEPLOY_CACHE[deploy_id] = {
             "user_id": message.from_user.id,
             "type": "zip",
@@ -271,7 +268,6 @@ async def handle_rename_state(client: Client, message: Message):
     deployment_id = state[11:]
     new_name = message.text.strip()
     
-    # Validate name
     if not new_name:
         await message.reply_text("<b>❌ Name cannot be empty. Please send a valid name:</b>")
         return
@@ -285,7 +281,6 @@ async def handle_rename_state(client: Client, message: Message):
         await database.update_user(user_id, {"current_state": None})
         return
         
-    # Update name in DB
     await database.update_deployment(deployment_id, {"dashboard_name": new_name})
     await database.update_user(user_id, {"current_state": None})
     
