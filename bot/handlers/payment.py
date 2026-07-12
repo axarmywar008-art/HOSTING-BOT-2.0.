@@ -32,7 +32,7 @@ async def buy_points_handler(client: Client, message: Message):
         f"│ 💰 ₹250 → 2500 points │\n"
         f"│ 💰 ₹500 → 5000 points │\n"
         f"└─────────────────────┘\n\n"
-        f"<b>💳 UPI ID:archit30@fam{settings.UPI_ID}</code>\n\n"
+        f"<b>💳 UPI ID:archit30@fam"
         f"<b>📝 How to pay:</b>\n"
         f"1️⃣ Send payment via UPI to above ID\n"
         f"2️⃣ Take a screenshot of the payment\n"
