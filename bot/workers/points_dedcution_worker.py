@@ -27,7 +27,10 @@ class PointDeductionWorker:
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         logger.info("PointDeductionWorker started")
-        await owner_log.send_log("worker_started", worker="PointDeductionWorker")
+        try:
+            await owner_log.send_log("worker_started", worker="PointDeductionWorker")
+        except Exception:
+            pass
 
     async def stop(self):
         """Stop the point deduction worker."""
@@ -131,24 +134,29 @@ class PointDeductionWorker:
             await database.mark_deployment_points_inactive(deployment_id)
             
             # Notify user
-            from bot.services.log_service import owner_log
-            await owner_log.send_user_notification(
-                user_id,
-                f"<b>⚠ Bot Stopped - Insufficient Points</b>\n\n"
-                f"Your bot <code>{dep.get('repo_url', 'Unknown')}</code> has been stopped because you ran out of points.\n\n"
-                f"<b>Points Remaining:</b> {points_remaining}\n"
-                f"<b>Daily Cost:</b> {self.DAILY_COST} points/day\n\n"
-                f"Please contact an admin to add more points to your account."
-            )
+            try:
+                await owner_log.send_user_notification(
+                    user_id,
+                    f"<b>⚠ Bot Stopped - Insufficient Points</b>\n\n"
+                    f"Your bot <code>{dep.get('repo_url', 'Unknown')}</code> has been stopped because you ran out of points.\n\n"
+                    f"<b>Points Remaining:</b> {points_remaining}\n"
+                    f"<b>Daily Cost:</b> {self.DAILY_COST} points/day\n\n"
+                    f"Please contact an admin to add more points to your account."
+                )
+            except Exception:
+                pass
             
             # Log to admin
-            await owner_log.send_log(
-                "bot_stopped_points",
-                user_id=str(user_id),
-                deployment_id=deployment_id[:8],
-                points_remaining=str(points_remaining),
-                reason="Insufficient points"
-            )
+            try:
+                await owner_log.send_log(
+                    "bot_stopped_points",
+                    user_id=str(user_id),
+                    deployment_id=deployment_id[:8],
+                    points_remaining=str(points_remaining),
+                    reason="Insufficient points"
+                )
+            except Exception:
+                pass
             
             logger.info(f"Stopped deployment {deployment_id} due to insufficient points for user {user_id}")
             
@@ -158,7 +166,6 @@ class PointDeductionWorker:
     async def _send_low_points_warning(self, user_id: int, deployment_id: str, points_remaining: int):
         """Send a warning to user when points are low."""
         try:
-            from bot.services.log_service import owner_log
             await owner_log.send_user_notification(
                 user_id,
                 f"<b>⚠ Low Points Warning</b>\n\n"
